@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ post.title }}</h1>
+
+<p><strong>Author:</strong> {{ post.author }}</p>
+<p><strong>Published:</strong> {{ post.published_date }}</p>
+
+<div class="post-card">
+    <p>{{ post.content }}</p>
+</div>
+
+<a href="/">Back to posts</a>
+
+{% endblock %}
