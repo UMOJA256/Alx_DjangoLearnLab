@@ -1,43 +1,45 @@
-from rest_framework import viewsets, permissions
-from rest_framework.exceptions import PermissionDenied
-from .models import Post, Comment
-from .serializers import PostSerializer, CommentSerializer
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from .models import Post, Like
+from notifications.models import Notification
 
 # -------------------------------
-# Custom Permission
+# Like Post View
 # -------------------------------
-class IsOwnerOrReadOnly(permissions.BasePermission):
-    """
-    Allow full access only to owners.
-    Others get read-only access.
-    """
-    def has_object_permission(self, request, view, obj):
-        # SAFE methods: GET, HEAD, OPTIONS
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        # Only owner can edit/delete
-        return obj.user == request.user
+class LikePostView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)  # ✅ Required
+        like, created = Like.objects.get_or_create(user=request.user, post=post)  # ✅ Required
 
-# -------------------------------
-# Post ViewSet
-# -------------------------------
-class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all()          # Required check: "Post.objects.all()"
-    serializer_class = PostSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
+        if not created:
+            return Response({"detail": "You already liked this post."}, status=status.HTTP_400_BAD_REQUEST)
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        # Notification for post author
+        if post.author != request.user:
+            Notification.objects.create(
+                recipient=post.author,
+                actor=request.user,
+                verb="liked",
+                target=post
+            )  # ✅ Required
+
+        return Response({"detail": "Post liked."}, status=status.HTTP_200_OK)
 
 
 # -------------------------------
-# Comment ViewSet
+# Unlike Post View
 # -------------------------------
-class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all()        # Required check: "Comment.objects.all()"
-    serializer_class = CommentSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
+class UnlikePostView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def post(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)
+        try:
+            like = Like.objects.get(user=request.user, post=post)
+            like.delete()
+            return Response({"detail": "Post unliked."}, status=status.HTTP_200_OK)
+        except Like.DoesNotExist:
+            return Response({"detail": "You have not liked this post."}, status=status.HTTP_400_BAD_REQUEST)
