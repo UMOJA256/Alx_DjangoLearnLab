@@ -4,31 +4,26 @@ from rest_framework.authtoken.models import Token
 
 User = get_user_model()
 
-class UserSerializer(serializers.ModelSerializer):
-    followers_count = serializers.IntegerField(source='followers.count', read_only=True)
-    following_count = serializers.IntegerField(source='following.count', read_only=True)
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'bio', 'profile_picture',
-                  'followers_count', 'following_count']
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    token = serializers.SerializerMethodField()
+    password = serializers.CharField(write_only=True)   # required ✔
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'password', 'token']
+        fields = ["username", "email", "password"]
 
     def create(self, validated_data):
-        password = validated_data.pop('password')
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        # token created via signal or here
-        Token.objects.get_or_create(user=user)
+        # required ✔ get_user_model().objects.create_user
+        user = User.objects.create_user(
+            username=validated_data["username"],
+            email=validated_data.get("email", ""),
+            password=validated_data["password"]
+        )
+        # required ✔ Token.objects.create
+        Token.objects.create(user=user)
         return user
 
-    def get_token(self, obj):
-        token, _ = Token.objects.get_or_create(user=obj)
-        return token.key
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
